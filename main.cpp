@@ -4,6 +4,7 @@
 #include <httplib.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <sqlite3.h>
 
 std::string bignum_to_raw_string(const BIGNUM *bn)
 {
@@ -86,6 +87,27 @@ std::string base64_url_encode(const std::string &data)
     return ret;
 }
 
+// Create a callback function  
+int callback(void *NotUsed, int argc, char **argv, char **azColName){
+
+    // int argc: holds the number of results
+    // (array) azColName: holds each column returned
+    // (array) argv: holds each value
+
+    for(int i = 0; i < argc; i++) {
+        
+        // Show column name, value, and newline
+        std::cout << azColName[i] << ": " << argv[i] << std::endl;
+    
+    }
+
+    // Insert a newline
+    std::cout << std::endl;
+
+    // Return successful
+    return 0;
+}
+
 int main()
 {
     // Generate RSA key pair
@@ -98,6 +120,32 @@ int main()
 
     std::string pub_key = extract_pub_key(pkey);
     std::string priv_key = extract_priv_key(pkey);
+
+    // Create SQLite Database
+    sqlite3 *db;
+    std::string sql;
+    char *zErrMsg = 0;
+    int rc;
+
+    rc = sqlite3_open("totally_not_my_privateKeys.db", &db);
+    if(rc){
+        fprintf(stderr, "Can't open database :%s\n", sqlite3_errmsg(db));
+        return(0);
+    } else {
+        fprintf(stderr, "Opened database successfully\n");
+    }
+
+    sql = "CREATE TABLE IF NOT EXISTS keys(" \
+        "kid INTEGER PRIMARY KEY AUTOINCREMENT," \
+        "key BLOB NOT NULL," \
+        "exp INTEGER NOT NULL);";
+    
+    rc = sqlite3_exec(db, sql.c_str(), callback, 0, &zErrMsg);
+
+    sql = "INSERT INTO keys ('kid', 'key', 'exp' ) VALUES ('expiredKid', '" + priv_key + "' , '1100100110');";
+    rc = sqlite3_exec(db, sql.c_str(), callback, 0, &zErrMsg);
+
+    std::cout << rc << std::endl;
 
     // Start HTTP server
     httplib::Server svr;
@@ -134,6 +182,8 @@ int main()
             res.set_content("Error retrieving JWKS", "text/plain");
             return;
         }
+        
+        std::cout << "wft\n";
 
         std::string n_encoded = base64_url_encode(bignum_to_raw_string(n));
         std::string e_encoded = base64_url_encode(bignum_to_raw_string(e));
@@ -180,6 +230,7 @@ int main()
 
     // Cleanup
     EVP_PKEY_free(pkey);
+    sqlite3_close(db);
 
     return 0;
 }

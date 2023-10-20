@@ -1,12 +1,13 @@
 # Variables
 CXX = g++
 CXXFLAGS = -std=c++11 -I./httplib -I./jwt-cpp/include
-LDFLAGS = -lcrypto -lssl
+LDFLAGS = -lcrypto -lssl -lsqlite3
 TARGET = jwks_server
 SOURCES = main.cpp
 
 # Get the path to the OpenSSL installation from Homebrew
 OPENSSL_PREFIX := $(shell brew --prefix openssl)
+SQLITE_PREFIX := $(shell brew --prefix sqlite3)
 
 # Add the path to the OpenSSL headers to the CXXFLAGS variable
 CXXFLAGS += -I$(OPENSSL_PREFIX)/include
@@ -32,6 +33,6 @@ fetch:
 	fi
 
 clean:
-	rm -rf $(TARGET) httplib jwt-cpp
+	rm -rf $(TARGET) httplib jwt-cpp totally_not_my_privateKeys.db
 
 .PHONY: all fetch clean

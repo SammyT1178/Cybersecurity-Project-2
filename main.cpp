@@ -263,6 +263,8 @@ int main()
 
         sqlite3_finalize(stmt);
 
+        std::cout << "JWT keyID: " << std::to_string(keyID) << std::endl;
+
         // Create JWT token
         auto token = jwt::create()
             .set_issuer("auth0")
@@ -279,6 +281,11 @@ int main()
             {
         sqlQuery = "SELECT * FROM keys WHERE exp >= ?;";
 
+        auto now = std::chrono::system_clock::now();
+        auto timeSinceEpoch = now.time_since_epoch();
+        std::chrono::seconds sec = std::chrono::duration_cast<std::chrono::seconds>(timeSinceEpoch);
+        int nowTime = static_cast<int>(sec.count());
+
         sqlite3_stmt* stmt;
         rc = sqlite3_prepare_v2(db, sqlQuery.c_str(), -1, &stmt, nullptr);
         if(rc != SQLITE_OK){
@@ -293,6 +300,7 @@ int main()
         
         while(sqlite3_step(stmt) == SQLITE_ROW){
             int keyID = sqlite3_column_int(stmt, 0);
+            std::cout << "JWKS KID: " << std::to_string(keyID) << std::endl;
             const char* tempPriv = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
             std::string priv = std::string(tempPriv);
 
@@ -313,8 +321,6 @@ int main()
             BN_free(e);
 
             jwks += "\n\t\t{\n\t\t\t\"alg\": \"RS256\", \n\t\t\t\"kty\": \"RSA\", \n\t\t\t\"use\": \"sig\", \n\t\t\t\"kid\": \"" + std::to_string(keyID) + "\", \n\t\t\t\"n\": \"" + n_encoded + "\", \n\t\t\t\"e\": \"" + e_encoded + "\"\n\t\t}\n";
-            
-            sqlite3_step(stmt);
         }
         jwks += "\t]\n}";
         std::cout << jwks << std::endl;

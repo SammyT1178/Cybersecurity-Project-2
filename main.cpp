@@ -222,6 +222,7 @@ int main()
         // Check if the "expired" query parameter is set to "true"
         bool expired = req.has_param("expired") && req.get_param_value("expired") == "true";
         
+        // Get current time (set to function maybe)
         auto now = std::chrono::system_clock::now();
         auto timeSinceEpoch = now.time_since_epoch();
         std::chrono::seconds sec = std::chrono::duration_cast<std::chrono::seconds>(timeSinceEpoch);
@@ -243,6 +244,7 @@ int main()
 
         sqlite3_bind_text(stmt, 1, std::to_string(nowTime).c_str(), -1, SQLITE_STATIC);
 
+        // Pull data from valid row, take last value
         std::string priv;
         int keyID;
         int exp;
@@ -282,11 +284,13 @@ int main()
             {
         sqlQuery = "SELECT * FROM keys WHERE exp >= ?;";
 
+        // Get Current Time (Maybe Set to Fuction Call)
         auto now = std::chrono::system_clock::now();
         auto timeSinceEpoch = now.time_since_epoch();
         std::chrono::seconds sec = std::chrono::duration_cast<std::chrono::seconds>(timeSinceEpoch);
         int nowTime = static_cast<int>(sec.count());
 
+        // Send the Query
         sqlite3_stmt* stmt;
         rc = sqlite3_prepare_v2(db, sqlQuery.c_str(), -1, &stmt, nullptr);
         if(rc != SQLITE_OK){
@@ -299,17 +303,20 @@ int main()
 
         std::string jwks = "{ \"keys\": [\n";
         
+        // Loop through all selected rows 
         while(sqlite3_step(stmt) == SQLITE_ROW){
             int keyID = sqlite3_column_int(stmt, 0);
             std::cout << "JWKS KID: " << std::to_string(keyID) << std::endl;
             const char* tempPriv = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
             std::string priv = std::string(tempPriv);
 
+            // Convert to Private Key
             EVP_PKEY* pkey = convertFromPrivateKeyString(priv);
 
             BIGNUM* n = NULL;
             BIGNUM* e = NULL;
 
+            // Pull Exponent and Modulus
             if (!EVP_PKEY_get_bn_param(pkey, "n", &n) || !EVP_PKEY_get_bn_param(pkey, "e", &e)) {
                 res.set_content("Error retrieving JWKS", "text/plain");
                 return;
@@ -321,6 +328,7 @@ int main()
             BN_free(n);
             BN_free(e);
 
+            // Add JWK to JWKS
             jwks += "\n\t\t{\n\t\t\t\"alg\": \"RS256\", \n\t\t\t\"kty\": \"RSA\", \n\t\t\t\"use\": \"sig\", \n\t\t\t\"kid\": \"" + std::to_string(keyID) + "\", \n\t\t\t\"n\": \"" + n_encoded + "\", \n\t\t\t\"e\": \"" + e_encoded + "\"\n\t\t}\n";
         }
         jwks += "\t]\n}";

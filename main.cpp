@@ -246,8 +246,9 @@ int main()
         std::string priv;
         int keyID;
         int exp;
-        while(sqlite3_step(stmt) == SQLITE_ROW){
+        while(sqlite3_step(stmt) != SQLITE_DONE){
             keyID = sqlite3_column_int(stmt, 0);
+            std::cout << "\tWhile loop: " << std::to_string(keyID) << std::endl;
             const char* tempPriv = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
             priv = std::string(tempPriv);
             exp = sqlite3_column_int(stmt, 2);

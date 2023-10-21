@@ -150,6 +150,12 @@ EVP_PKEY* convertFromPrivateKeyString(const std::string& privString){
     return pkey;
 }
 
+struct KeyData{
+    int kid; 
+    std::vector<unsigned char> key;
+    int exp;
+};
+
 int main()
 {
     // Generate RSA key pair
@@ -244,17 +250,27 @@ int main()
 
         sqlite3_bind_text(stmt, 1, std::to_string(nowTime).c_str(), -1, SQLITE_STATIC);
 
-        // Pull data from valid row, take last value
-        std::string priv;
-        int keyID;
-        int exp;
-        while(sqlite3_step(stmt) != SQLITE_DONE){
-            keyID = sqlite3_column_int(stmt, 0);
-            std::cout << "\tWhile loop: " << std::to_string(keyID) << std::endl;
-            const char* tempPriv = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-            priv = std::string(tempPriv);
-            exp = sqlite3_column_int(stmt, 2);
+        std::vector<KeyData> results;   
+
+        // Pull data from valid row, take first value
+        while((rc = sqlite3_step(stmt)) == SQLITE_ROW){
+            KeyData data;
+            std::cout << rc << std::endl;
+            data.kid = sqlite3_column_int(stmt, 0);
+            //std::cout << "\tWhile loop: " << std::to_string(keyID) << std::endl;
+            const unsigned char* keyPtr = static_cast<const unsigned char*>(sqlite3_column_blob(stmt, 1));
+            int keySize = sqlite3_column_bytes(stmt, 1);
+            data.key.assign(keyPtr, keyPtr + keySize);
+            data.exp = sqlite3_column_int(stmt, 2);
+            results.push_back(data);
         }
+
+        KeyData firstResult = results[0];
+
+        std::vector<unsigned char> keyVector = firstResult.key;
+        std::string priv(keyVector.begin(), keyVector.end());
+        int keyID = firstResult.kid;
+        int exp = firstResult.exp;
         
         // Convert exp value into usable value
         std::chrono::system_clock::time_point tp = std::chrono::system_clock::from_time_t(exp);
@@ -304,11 +320,29 @@ int main()
         std::string jwks = "{ \"keys\": [\n";
         
         // Loop through all selected rows 
-        while(sqlite3_step(stmt) == SQLITE_ROW){
-            int keyID = sqlite3_column_int(stmt, 0);
-            std::cout << "JWKS KID: " << std::to_string(keyID) << std::endl;
-            const char* tempPriv = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-            std::string priv = std::string(tempPriv);
+        std::vector<KeyData> results;   
+
+        // Pull data from valid row, take first value
+        while((rc = sqlite3_step(stmt)) == SQLITE_ROW){
+            KeyData data;
+            std::cout << rc << std::endl;
+            data.kid = sqlite3_column_int(stmt, 0);
+            //std::cout << "\tWhile loop: " << std::to_string(keyID) << std::endl;
+            const unsigned char* keyPtr = static_cast<const unsigned char*>(sqlite3_column_blob(stmt, 1));
+            int keySize = sqlite3_column_bytes(stmt, 1);
+            data.key.assign(keyPtr, keyPtr + keySize);
+            data.exp = sqlite3_column_int(stmt, 2);
+            results.push_back(data);
+        }
+
+        int resultsSize = static_cast<int>(results.size());
+        for(int i = 0; i < resultsSize; i++){
+            KeyData firstResult = results[i];
+
+            std::vector<unsigned char> keyVector = firstResult.key;
+            std::string priv(keyVector.begin(), keyVector.end());
+            int keyID = firstResult.kid;
+            int exp = firstResult.exp;
 
             // Convert to Private Key
             EVP_PKEY* pkey = convertFromPrivateKeyString(priv);
@@ -329,9 +363,12 @@ int main()
             BN_free(e);
 
             // Add JWK to JWKS
-            jwks += "\n\t\t{\n\t\t\t\"alg\": \"RS256\", \n\t\t\t\"kty\": \"RSA\", \n\t\t\t\"use\": \"sig\", \n\t\t\t\"kid\": \"" + std::to_string(keyID) + "\", \n\t\t\t\"n\": \"" + n_encoded + "\", \n\t\t\t\"e\": \"" + e_encoded + "\"\n\t\t}\n";
+            jwks += "\n\t\t{\n\t\t\t\"alg\": \"RS256\", \n\t\t\t\"kty\": \"RSA\", \n\t\t\t\"use\": \"sig\", \n\t\t\t\"kid\": \"" + std::to_string(keyID) + "\", \n\t\t\t\"n\": \"" + n_encoded + "\", \n\t\t\t\"e\": \"" + e_encoded + "\"\n\t\t}";
+
+            if(i < (resultsSize - 1))
+                jwks += ",\n";
         }
-        jwks += "\t]\n}";
+        jwks += "\n\t]\n}";
         std::cout << jwks << std::endl;
         sqlite3_finalize(stmt);
         res.set_content(jwks, "application/json"); });

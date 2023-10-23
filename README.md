@@ -15,4 +15,4 @@ To run the program, run `make`, then the provided compiled file `jwks_server` ca
 ### Server Results
 ![alt text](https://cdn.discordapp.com/attachments/588868774472450079/1166061090573144084/image.png?ex=65491e04&is=6536a904&hm=a304c73d5f4fb9a52806fbab885e0579f9f87e5632afcecc3a4c934057ab0fc0&)
 ### Test Suite Coverage (main.cpp)
-![alt text](https://cdn.discordapp.com/attachments/1154202485024620585/1154202974021750844/image.png)
+![alt text](https://cdn.discordapp.com/attachments/588868774472450079/1166143208955314248/image.png?ex=65496a7e&is=6536f57e&hm=f73bef54333de0eb4a9b8cdcdd16439c8fc63c1ff77a320c696b985f97c5b281&)

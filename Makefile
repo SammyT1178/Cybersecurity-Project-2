@@ -1,7 +1,7 @@
 # Variables
 CXX = g++
-CXXFLAGS = -std=c++11 -I./httplib -I./jwt-cpp/include
-LDFLAGS = -lcrypto -lssl -lsqlite3
+CXXFLAGS = -std=c++11 -I./httplib -I./jwt-cpp/include -I./argon2/include -I./nlohmann/include -L./argon2
+LDFLAGS = -lcrypto -lssl -lsqlite3 -luuid -largon2
 TARGET = jwks_server
 SOURCES = main.cpp
 
@@ -32,7 +32,18 @@ fetch:
 		git clone https://github.com/Thalhammer/jwt-cpp.git; \
 	fi
 
+	# Check if argon2 directory exists, if not fetch it
+	@if [ ! -d "argon2" ]; then \
+		git clone https://github.com/P-H-C/phc-winner-argon2.git argon2; \
+		cd argon2; make; cd ..; \
+	fi
+
+	# Check if nlohmann/json directory exists, if not fetch it
+	@if [ ! -d "nlohmann" ]; then \
+		git clone https://github.com/nlohmann/json.git nlohmann; \
+	fi
+
 clean:
-	rm -rf $(TARGET) httplib jwt-cpp totally_not_my_privateKeys.db
+	rm -rf $(TARGET) httplib jwt-cpp nlohmann argon2 totally_not_my_privateKeys.db
 
 .PHONY: all fetch clean

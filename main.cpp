@@ -3,8 +3,51 @@
 #include <jwt-cpp/jwt.h>
 #include <httplib.h>
 #include <openssl/evp.h>
+#include <openssl/aes.h>
+#include <openssl/rand.h>
 #include <openssl/pem.h>
 #include <sqlite3.h>
+#include <uuid/uuid.h>
+#include <argon2.h>
+#include <nlohmann/json.hpp>
+
+#define HASHLEN 32
+#define SALTLEN 16
+
+using json = nlohmann::json;
+
+std::string hashPassword(const std::string& password){
+    uint8_t hash[HASHLEN];
+    uint8_t salt[SALTLEN];
+    memset(salt, 0x00, SALTLEN);
+    
+    uint8_t *pwd = (uint8_t *)strdup(password.c_str());
+    uint32_t pwdlen = strlen((char *)pwd);
+
+    uint32_t t_cost = 2;
+    uint32_t m_cost = (1<<16);
+    uint32_t parallelism = 1;
+
+    argon2i_hash_raw(t_cost, m_cost, parallelism, pwd, pwdlen, salt, SALTLEN, hash, HASHLEN);
+
+    if(hash){
+        char* chash = (char*)hash;
+        std::string finalHash = chash;
+        return finalHash;
+    } else {
+        return "FUCK";
+    }
+}
+
+std::string generatePassword(){
+    uuid_t uuid;
+    uuid_generate_random(uuid);
+
+    char uuidStr[37];
+    uuid_unparse(uuid, uuidStr);
+
+    return std::string(uuidStr);
+}
 
 std::string bignum_to_raw_string(const BIGNUM *bn)
 {
@@ -128,7 +171,7 @@ int insertData(std::string value1, std::string value2){
         return rc;
     }
 
-    sqlite3_bind_text(stmt, 1, value1.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_blob(stmt, 1, value1.c_str(), value1.length(), SQLITE_STATIC);
     sqlite3_bind_text(stmt, 2, value2.c_str(), -1, SQLITE_STATIC);
 
     rc = sqlite3_step(stmt);
@@ -142,12 +185,167 @@ int insertData(std::string value1, std::string value2){
     return SQLITE_OK;
 }
 
+int insertRegister(std::string value1, std::string value2, std::string value3, std::string value4){
+    sqlite3* db;
+    int rc = sqlite3_open("totally_not_my_privateKeys.db", &db);
+    if(rc){
+        fprintf(stderr, "Can't open database :%s\n", sqlite3_errmsg(db));
+        return rc;
+    }
+
+    std::string query = "INSERT INTO users (username, password_hash, email, last_login) VALUES (?, ?, ?, ?);";
+
+    sqlite3_stmt* stmt;
+    rc = sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr);
+
+    if(rc != SQLITE_OK)
+    {
+        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+        return rc;
+    }
+
+    sqlite3_bind_text(stmt, 1, value1.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, value2.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, value3.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, value4.c_str(), -1, SQLITE_STATIC);
+
+    rc = sqlite3_step(stmt);
+    if(rc != SQLITE_DONE){
+        std::cerr << "Failed to execute query: " << sqlite3_errmsg(db) << std::endl;
+        return rc;
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return SQLITE_OK;
+}
+
+int insertRequest(std::string value1, std::string value2, std::string value3){
+    sqlite3* db;
+    int rc = sqlite3_open("totally_not_my_privateKeys.db", &db);
+    if(rc){
+        fprintf(stderr, "Can't open database :%s\n", sqlite3_errmsg(db));
+        return rc;
+    }
+
+    std::string query = "INSERT INTO auth_logs (request_ip, request_timestamp, user_id) VALUES (?, ?, ?);";
+
+    sqlite3_stmt* stmt;
+    rc = sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr);
+
+    if(rc != SQLITE_OK)
+    {
+        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+        return rc;
+    }
+
+    sqlite3_bind_text(stmt, 1, value1.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, value2.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, value3.c_str(), -1, SQLITE_STATIC);
+
+    rc = sqlite3_step(stmt);
+    if(rc != SQLITE_DONE){
+        std::cerr << "Failed to execute query: " << sqlite3_errmsg(db) << std::endl;
+        return rc;
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return SQLITE_OK;
+}
+
+// Get the user ID from the given username
+int get_userID(std::string username){
+    sqlite3* db;
+    int rc = sqlite3_open("totally_not_my_privateKeys.db", &db);
+    if(rc){
+        fprintf(stderr, "Can't open database :%s\n", sqlite3_errmsg(db));
+        return rc;
+    }
+
+    std::string sqlQuery = "SELECT id FROM users WHERE username = ?;";
+
+    sqlite3_stmt* stmt;
+    rc = sqlite3_prepare_v2(db, sqlQuery.c_str(), -1, &stmt, nullptr);
+
+    if(rc != SQLITE_OK)
+    {
+        std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db) << std::endl;
+        return rc;
+    }
+
+    sqlite3_bind_text(stmt, 4, username.c_str(), -1, SQLITE_STATIC);
+
+    rc = sqlite3_step(stmt);
+    if(rc != SQLITE_DONE){
+        std::cerr << "Failed to execute query: " << sqlite3_errmsg(db) << std::endl;
+        return rc;
+    }
+
+    int user_id = sqlite3_column_int(stmt, 0);
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return user_id;
+}
+
 // Pull the EVP_PKEY value from a string
 EVP_PKEY* convertFromPrivateKeyString(const std::string& privString){
     BIO* bio = BIO_new_mem_buf(privString.c_str(), -1);
     EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
     BIO_free(bio);
     return pkey;
+}
+
+// AES Encryption
+std::string aes_encrypt(const std::string &plaintext, const std::string &key){
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    
+    // Initialize IV
+    unsigned char iv[EVP_MAX_IV_LENGTH];
+    RAND_bytes(iv, EVP_MAX_IV_LENGTH);
+
+    // Initialize encryption
+    EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, reinterpret_cast<const unsigned char*>(key.c_str()), iv);
+
+    // Encrypt
+    int ciphertext_len = plaintext.length() + EVP_MAX_BLOCK_LENGTH;
+    unsigned char ciphertext[ciphertext_len];
+    EVP_EncryptUpdate(ctx, ciphertext, &ciphertext_len, reinterpret_cast<const unsigned char*>(plaintext.c_str()), plaintext.length());
+    int final_len; 
+    EVP_EncryptFinal_ex(ctx, ciphertext + ciphertext_len, &final_len);
+    ciphertext_len += final_len;
+
+    EVP_CIPHER_CTX_free(ctx);
+
+    std::string result(reinterpret_cast<char*>(iv), EVP_MAX_IV_LENGTH);
+    result += std::string(reinterpret_cast<char*>(ciphertext), ciphertext_len);
+
+    return result;
+}
+
+// AES Decryption
+std::string aes_decrypt(const std::string &ciphertext, const std::string &key){
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+
+    // Extract IV
+    unsigned char iv[EVP_MAX_IV_LENGTH];
+    std::memcpy(iv, ciphertext.c_str(), EVP_MAX_IV_LENGTH);
+
+    // Initialize decryption
+    EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, reinterpret_cast<const unsigned char*>(key.c_str()), iv);
+
+    // Decrypt
+    int plaintext_len = ciphertext.length() - EVP_MAX_IV_LENGTH;
+    unsigned char plaintext[plaintext_len];
+    EVP_DecryptUpdate(ctx, plaintext, &plaintext_len, reinterpret_cast<const unsigned char*>(ciphertext.c_str()) + EVP_MAX_IV_LENGTH, plaintext_len);
+    int final_len;
+    EVP_DecryptFinal_ex(ctx, plaintext + plaintext_len, &final_len);
+    plaintext_len += final_len;
+
+    EVP_CIPHER_CTX_free(ctx);
+
+    return std::string(reinterpret_cast<char*>(plaintext), plaintext_len);
 }
 
 struct KeyData{
@@ -166,8 +364,15 @@ int main()
     EVP_PKEY_keygen(ctx, &pkey);
     EVP_PKEY_CTX_free(ctx);
 
-    std::string pub_key = extract_pub_key(pkey);
+    // Keys
+    std::string pub_key_master = extract_pub_key(pkey);
     std::string priv_key = extract_priv_key(pkey);
+
+    // Get key from environment variable
+    if(!std::getenv("NOT_MY_KEY")){
+        std::cerr << "NOT_MY_KEY not set\n";
+        return 1;
+    }
 
     // Create SQLite Database
     sqlite3 *db;
@@ -192,26 +397,51 @@ int main()
     
     rc = sqlite3_exec(db, sql.c_str(), callback, 0, &zErrMsg);
 
+    sql = "CREATE TABLE IF NOT EXISTS users(" \
+        "id INTEGER PRIMARY KEY AUTOINCREMENT," \
+        "username TEXT NOT NULL UNIQUE," \
+        "password_hash TEXT NOT NULL," \
+        "email TEXT UNIQUE," \
+        "date_registered TIMESTAMP DEFAULT CURRENT_TIMESTAMP," \
+        "last_login TIMESTAMP);";
+    
+    rc = sqlite3_exec(db, sql.c_str(), callback, 0, &zErrMsg);
+
+    sql = "CREATE TABLE IF NOT EXISTS auth_logs(" \
+        "id INTEGER PRIMARY KEY AUTOINCREMENT," \
+        "request_ip TEXT NOT NULL," \
+        "request_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP," \
+        "user_id INTEGER," \
+        "FOREIGN KEY(user_id) REFERENCES users(id));";
+
+    rc = sqlite3_exec(db, sql.c_str(), callback, 0, &zErrMsg);
+
+    if(rc != SQLITE_OK){
+        std::cout << "SQL error: " << sqlite3_errmsg(db) << std::endl;
+    }
+
     auto now = std::chrono::system_clock::now();
     auto timeSinceEpoch = now.time_since_epoch();
     std::chrono::seconds sec = std::chrono::duration_cast<std::chrono::seconds>(timeSinceEpoch);
     int nowTime = static_cast<int>(sec.count());
     int hourTime = static_cast<int>(sec.count() + 3600);
 
-    rc = insertData(priv_key, std::to_string(nowTime));
+    std::string encrypted_priv_key = aes_encrypt(priv_key, std::getenv("NOT_MY_KEY"));
+
+    rc = insertData(encrypted_priv_key, std::to_string(nowTime));
     if(rc != SQLITE_OK){
         std::cout << "SQL error: " << sqlite3_errmsg(db) << std::endl;
     }
     else{
-        std::cout << "Record inserted successfully\n";
+        std::cout << "Record inserted successfully: Invalid Key\n";
     }
 
-    rc = insertData(priv_key, std::to_string(hourTime));
+    rc = insertData(encrypted_priv_key, std::to_string(hourTime));
     if(rc != SQLITE_OK){
         std::cout << "SQL error: " << sqlite3_errmsg(db) << std::endl;
     }
     else{
-        std::cout << "Record inserted successfully\n";
+        std::cout << "Record inserted successfully: Valid Key\n";
     }
         
 
@@ -225,6 +455,36 @@ int main()
             res.set_content("Method Not Allowed", "text/plain");
             return;
         }
+        
+
+        json incoming_json = json::parse(req.body);
+
+        std::string username = incoming_json["username"];
+        int user_id = get_userID(username);
+        std::string request_ip = req.get_header_value("REMOTE_ADDR");
+
+        auto currentTime = std::chrono::system_clock::now();
+        std::time_t currentTime_t = std::chrono::system_clock::to_time_t(currentTime);
+        std::tm tmStruct = *std::localtime(&currentTime_t);
+        std::ostringstream timeStr;
+        timeStr << std::put_time(&tmStruct, "%Y-%m-%d %H:%M:%S");
+        auto duration = currentTime.time_since_epoch();
+        auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() % 1000;
+        std::ostringstream millisStr; 
+        millisStr << std::setfill('0') << std::setw(3) << milliseconds;
+
+        std::string request_timestamp = timeStr.str() + "." + millisStr.str();
+
+
+        rc = insertRequest(request_ip, request_timestamp, std::to_string(user_id));
+        if(rc != SQLITE_OK){
+            std::cout << "SQL error: " << sqlite3_errmsg(db) << std::endl;
+        }
+        else{
+            std::cout << "Record inserted successfully: auth_logs\t";
+            std::cout << request_timestamp << std::endl;
+        }
+
         // Check if the "expired" query parameter is set to "true"
         bool expired = req.has_param("expired") && req.get_param_value("expired") == "true";
         
@@ -255,7 +515,7 @@ int main()
         // Pull data from valid row, take first value
         while((rc = sqlite3_step(stmt)) == SQLITE_ROW){
             KeyData data;
-            std::cout << rc << std::endl;
+            //std::cout << rc << std::endl;
             data.kid = sqlite3_column_int(stmt, 0);
             //std::cout << "\tWhile loop: " << std::to_string(keyID) << std::endl;
             const unsigned char* keyPtr = static_cast<const unsigned char*>(sqlite3_column_blob(stmt, 1));
@@ -276,13 +536,13 @@ int main()
         std::chrono::system_clock::time_point tp = std::chrono::system_clock::from_time_t(exp);
         jwt::date expDate(tp);
 
-        EVP_PKEY* pkey = convertFromPrivateKeyString(priv);
+        std::string decrypted_priv = aes_decrypt(priv, std::getenv("NOT_MY_KEY"));
+
+        EVP_PKEY* pkey = convertFromPrivateKeyString(decrypted_priv);
         std::string pub_key = extract_pub_key(pkey);
-        std::string priv_key = extract_priv_key(pkey);
+        std::string priv_key = extract_priv_key(pkey); 
 
         sqlite3_finalize(stmt);
-
-        std::cout << "JWT keyID: " << std::to_string(keyID) << std::endl;
 
         // Create JWT token
         auto token = jwt::create()
@@ -325,7 +585,7 @@ int main()
         // Pull data from valid row, take first value
         while((rc = sqlite3_step(stmt)) == SQLITE_ROW){
             KeyData data;
-            std::cout << rc << std::endl;
+            //std::cout << rc << std::endl;
             data.kid = sqlite3_column_int(stmt, 0);
             //std::cout << "\tWhile loop: " << std::to_string(keyID) << std::endl;
             const unsigned char* keyPtr = static_cast<const unsigned char*>(sqlite3_column_blob(stmt, 1));
@@ -345,7 +605,8 @@ int main()
             int exp = firstResult.exp;
 
             // Convert to Private Key
-            EVP_PKEY* pkey = convertFromPrivateKeyString(priv);
+            std::string decrypted_priv = aes_decrypt(priv, std::getenv("NOT_MY_KEY"));
+            EVP_PKEY* pkey = convertFromPrivateKeyString(decrypted_priv);
 
             BIGNUM* n = NULL;
             BIGNUM* e = NULL;
@@ -372,6 +633,42 @@ int main()
         std::cout << jwks << std::endl;
         sqlite3_finalize(stmt);
         res.set_content(jwks, "application/json"); });
+
+    svr.Post("/register", [&](const httplib::Request &req, httplib::Response &res)
+    {
+        json incoming_json = json::parse(req.body);
+
+        std::string username = incoming_json["username"];
+        std::string email = incoming_json["email"];
+        
+        std::string newPassword = generatePassword();
+        std::string hashedPass = hashPassword(newPassword);
+
+        auto currentTime = std::chrono::system_clock::now();
+        std::time_t currentTime_t = std::chrono::system_clock::to_time_t(currentTime);
+        std::tm tmStruct = *std::localtime(&currentTime_t);
+        std::ostringstream timeStr;
+        timeStr << std::put_time(&tmStruct, "%Y-%m-%d %H:%M:%S");
+        auto duration = currentTime.time_since_epoch();
+        auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() % 1000;
+        std::ostringstream millisStr; 
+        millisStr << std::setfill('0') << std::setw(3) << milliseconds;
+
+        std::string lastLogin = timeStr.str() + "." + millisStr.str();
+        
+
+        rc = insertRegister(username, hashedPass, email, lastLogin);
+        if(rc != SQLITE_OK){
+            std::cout << "SQL error: " << sqlite3_errmsg(db) << std::endl;
+        }
+        else{
+            std::cout << "Record inserted successfully: Register\t";
+            std::cout << lastLogin << std::endl;
+        }
+
+        std::string jsonString = "{\"password\": \"" + newPassword + "\"}";
+
+        res.set_content(jsonString, "application/json"); });
 
     // Catch-all handlers for other methods
     auto methodNotAllowedHandler = [](const httplib::Request &req, httplib::Response &res)

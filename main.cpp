@@ -1,5 +1,8 @@
 #include <iostream>
 #include <string>
+#include <chrono>
+#include <mutex>
+#include <thread>
 #include <jwt-cpp/jwt.h>
 #include <httplib.h>
 #include <openssl/evp.h>
@@ -16,6 +19,37 @@
 
 using json = nlohmann::json;
 
+class RateLimiter{
+    public:
+        RateLimiter(int rate, std::chrono::seconds window)
+            : rate_(rate), window_(window), tokens_(0) {}
+        
+        bool allowRequest() {
+            std::lock_guard<std::mutex> lock(mutex_);
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed_time = now - last_refill_time_;
+
+            int tokens_to_add = static_cast<int>(elapsed_time / std::chrono::seconds(1) * rate_);
+            tokens_ = std::min(tokens_ + tokens_to_add, rate_);
+
+            last_refill_time_ = now;
+
+            if(tokens_ > 0){
+                tokens_--;
+                return true;
+            }
+
+            return false;
+        }
+    private:
+        int rate_;
+        std::chrono::seconds window_;
+        int tokens_;
+        std::chrono::steady_clock::time_point last_refill_time_;
+        std::mutex mutex_;
+};
+
+// Hashes Generated password using Argon2
 std::string hashPassword(const std::string& password){
     uint8_t hash[HASHLEN];
     uint8_t salt[SALTLEN];
@@ -448,6 +482,8 @@ int main()
     // Start HTTP server
     httplib::Server svr;
 
+    RateLimiter rateLimiter(10, std::chrono::seconds(1));
+
     svr.Post("/auth", [&](const httplib::Request &req, httplib::Response &res)
              {
         if (req.method != "POST") {
@@ -456,6 +492,11 @@ int main()
             return;
         }
         
+        if(!rateLimiter.allowRequest()){
+            res.status = 429;
+            res.set_content("Too Many Requests", "text/plain");
+            return;
+        }
 
         json incoming_json = json::parse(req.body);
 

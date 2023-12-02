@@ -19,6 +19,7 @@
 
 using json = nlohmann::json;
 
+// Optional Rate Limiter
 class RateLimiter{
     public:
         RateLimiter(int rate, std::chrono::seconds window)
@@ -69,10 +70,11 @@ std::string hashPassword(const std::string& password){
         std::string finalHash = chash;
         return finalHash;
     } else {
-        return "FUCK";
+        return "Incorrect Hashin";
     }
 }
 
+// Generates a UUIDv4 Password
 std::string generatePassword(){
     uuid_t uuid;
     uuid_generate_random(uuid);
@@ -476,8 +478,7 @@ int main()
     }
     else{
         std::cout << "Record inserted successfully: Valid Key\n";
-    }
-        
+    }  
 
     // Start HTTP server
     httplib::Server svr;

@@ -1,4 +1,4 @@
-# Cybersecurity-Project-2
+# Cybersecurity-Project-3
 
 This is a JWKS server using a RESTful HTTP API running on C++. The server runs locally (127.0.0.1:8080). The server generates an RSA key pair, generates a JWT with a unique Key ID, and JWKS list of public keys. These keys are stored and retrieved from an SQLite database.  
 
@@ -11,8 +11,8 @@ To run the program, run `make`, then the provided compiled file `jwks_server` ca
 ## Results of JWKS Server
 
 ### Black Box Results
-![alt text](https://cdn.discordapp.com/attachments/588868774472450079/1166061173666492496/image.png?ex=65491e18&is=6536a918&hm=f2c7c30e03ec9f48b28a2d03750c2f91fc405ce4091ce881305706c134f78854&)
+![alt text](https://media.discordapp.net/attachments/1154202485024620585/1181285719830970439/image.png?ex=6580810e&is=656e0c0e&hm=05591288812c790de3e3853aa9b0fcd6307e21faf39c56a2656e38c2010cf80c&=&format=webp&quality=lossless&width=881&height=391)
 ### Server Results
-![alt text](https://cdn.discordapp.com/attachments/588868774472450079/1166061090573144084/image.png?ex=65491e04&is=6536a904&hm=a304c73d5f4fb9a52806fbab885e0579f9f87e5632afcecc3a4c934057ab0fc0&)
+![alt text](https://media.discordapp.net/attachments/1154202485024620585/1181285813833703494/image.png?ex=65808125&is=656e0c25&hm=d1807019e82fa594eaa3c10715f15e6715395a011c7ff30a3bc4980fa7f53ed7&=&format=webp&quality=lossless&width=881&height=530)
 ### Test Suite Coverage (main.cpp)
-![alt text](https://cdn.discordapp.com/attachments/588868774472450079/1166143208955314248/image.png?ex=65496a7e&is=6536f57e&hm=f73bef54333de0eb4a9b8cdcdd16439c8fc63c1ff77a320c696b985f97c5b281&)
+![alt text](https://media.discordapp.net/attachments/1154202485024620585/1181303514417352794/image.png?ex=658091a1&is=656e1ca1&hm=26950bdeeb1ae8d998ee971b3b688cc8874f560a31827c190c3c5578526175dd&=&format=webp&quality=lossless&width=881&height=137)

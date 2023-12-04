@@ -70,7 +70,7 @@ std::string hashPassword(const std::string& password){
         std::string finalHash = chash;
         return finalHash;
     } else {
-        return "Incorrect Hashin";
+        return "Incorrect Hashing";
     }
 }
 
@@ -310,15 +310,12 @@ int get_userID(std::string username){
         return rc;
     }
 
-    sqlite3_bind_text(stmt, 4, username.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, username.c_str(), -1, SQLITE_STATIC);
+    int user_id; 
 
-    rc = sqlite3_step(stmt);
-    if(rc != SQLITE_DONE){
-        std::cerr << "Failed to execute query: " << sqlite3_errmsg(db) << std::endl;
-        return rc;
-    }
-
-    int user_id = sqlite3_column_int(stmt, 0);
+   while((rc = sqlite3_step(stmt)) == SQLITE_ROW){
+		user_id = sqlite3_column_int(stmt, 0);
+	}  
 
     sqlite3_finalize(stmt);
     sqlite3_close(db);
